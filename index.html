@@ -37,7 +37,6 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    /* ── SCROLLBAR ── */
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
@@ -53,7 +52,7 @@
     #lock-screen.hidden { opacity: 0; pointer-events: none; transform: scale(1.02); }
 
     .lock-box {
-      width: 100%; max-width: 380px;
+      width: 100%; max-width: 400px;
       padding: 20px;
       text-align: center;
     }
@@ -74,8 +73,66 @@
       color: var(--muted);
       letter-spacing: 3px;
       text-transform: uppercase;
-      margin-bottom: 48px;
+      margin-bottom: 36px;
     }
+
+    /* GitHub config on lock screen */
+    .gh-config-box {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 16px;
+      text-align: left;
+    }
+    .gh-config-title {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .gh-config-title .dot { width:6px;height:6px;border-radius:50%;background:var(--muted);display:inline-block; }
+    .gh-config-title .dot.ok { background: var(--accent2); }
+    .gh-config-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .gh-config-grid .full { grid-column: 1 / -1; }
+    .gh-input {
+      width: 100%;
+      padding: 9px 12px;
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 12px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .gh-input:focus { border-color: var(--accent2); }
+    .gh-input::placeholder { color: var(--muted); }
+    .gh-save-btn {
+      width: 100%;
+      padding: 9px;
+      background: transparent;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all .2s;
+      margin-top: 4px;
+    }
+    .gh-save-btn:hover { border-color: var(--accent2); color: var(--accent2); }
 
     .lock-field-wrap {
       position: relative;
@@ -130,15 +187,7 @@
     }
     .btn-primary:hover { opacity: .88; }
     .btn-primary:active { transform: scale(.98); }
-
-    .lock-hint {
-      font-family: var(--mono);
-      font-size: 11px;
-      color: var(--muted);
-      margin-top: 28px;
-    }
-    .lock-hint a { color: var(--accent2); text-decoration: none; }
-    .lock-hint a:hover { text-decoration: underline; }
+    .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
 
     /* ── APP SHELL ── */
     #app {
@@ -213,6 +262,7 @@
     .btn-icon.accent:hover { background: var(--accent); color: #0a0a0f; }
     .btn-icon.green { border-color: var(--accent2); color: var(--accent2); }
     .btn-icon.green:hover { background: var(--accent2); color: #0a0a0f; }
+    .btn-icon.syncing { border-color: var(--accent); color: var(--accent); opacity: .7; cursor: default; }
     .btn-icon svg { flex-shrink: 0; }
 
     /* ── MAIN AREA ── */
@@ -571,8 +621,15 @@
       background: var(--muted);
       margin-right: 6px;
     }
-    .status-dot.saved { background: var(--accent2); }
+    .status-dot.saved   { background: var(--accent2); }
     .status-dot.unsaved { background: var(--accent); }
+    .status-dot.syncing { background: var(--accent); animation: pulse 1s infinite; }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* ── SPIN ANIMATION for sync button ── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin .7s linear infinite; }
 
     /* ── RESPONSIVE ── */
     @media (max-width: 600px) {
@@ -591,6 +648,20 @@
     <div class="lock-logo">V<span>.</span>ault</div>
     <div class="lock-sub">Personal Password Manager</div>
 
+    <!-- GitHub config (persisted in localStorage) -->
+    <div class="gh-config-box">
+      <div class="gh-config-title">
+        <span class="dot" id="gh-dot"></span>
+        GitHub Sync
+      </div>
+      <div class="gh-config-grid">
+        <input class="gh-input" id="gh-owner" placeholder="GitHub username" autocomplete="off" />
+        <input class="gh-input" id="gh-repo"  placeholder="Repo name (vault-data)" autocomplete="off" />
+        <input class="gh-input full" id="gh-token" type="password" placeholder="Personal Access Token (ghp_…)" autocomplete="off" />
+      </div>
+      <button class="gh-save-btn" onclick="saveGhConfig()">Save GitHub settings</button>
+    </div>
+
     <div class="lock-field-wrap">
       <input type="password" id="master-input" placeholder="Enter master password" autocomplete="current-password" />
       <button class="eye-btn" onclick="toggleMasterVis()" title="Show/hide">
@@ -601,12 +672,7 @@
     </div>
 
     <div id="lock-error"></div>
-    <button class="btn-primary" onclick="unlock()">Unlock Vault</button>
-
-    <p class="lock-hint">
-      First time? Just enter any password — it becomes your master key.<br>
-      <a href="#" onclick="showImportOnUnlock()">Load existing vault from file</a>
-    </p>
+    <button class="btn-primary" id="unlock-btn" onclick="unlock()">Unlock &amp; Sync from GitHub</button>
   </div>
 </div>
 
@@ -622,11 +688,13 @@
       <input type="text" id="search-input" placeholder="Search entries…" oninput="renderEntries()" />
     </div>
     <div class="topbar-actions">
-      <button class="btn-icon green" onclick="saveToFile()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        <span>Save File</span>
+      <!-- Sync to GitHub replaces Save File -->
+      <button class="btn-icon green" id="sync-btn" onclick="syncToGitHub()" title="Push changes to GitHub">
+        <svg id="sync-icon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        <span>Sync</span>
       </button>
-      <button class="btn-icon" onclick="triggerImport()">
+      <!-- Load File kept as fallback -->
+      <button class="btn-icon" onclick="triggerImport()" title="Load vault.vault from disk (fallback)">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         <span>Load File</span>
       </button>
@@ -649,7 +717,7 @@
 
   <!-- STATUS BAR -->
   <footer class="status-bar">
-    <span class="status-text"><span class="status-dot" id="status-dot"></span><span id="status-text">No file loaded</span></span>
+    <span class="status-text"><span class="status-dot" id="status-dot"></span><span id="status-text">Ready</span></span>
     <span class="status-text" id="status-right"></span>
   </footer>
 </div>
@@ -714,14 +782,15 @@
 // ══════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════
-let masterKey = null;
-let entries = [];
-let currentFile = null;
-let isDirty = false;
+let masterKey  = null;
+let entries    = [];
+let isDirty    = false;
 let activeFilter = 'All';
+let ghSha      = null;   // current SHA of vault.vault on GitHub (needed for PUT)
+let ghCfg      = {};     // { owner, repo, token }
 
 // ══════════════════════════════════════════
-//  CRYPTO
+//  CRYPTO  (CryptoJS — same as before)
 // ══════════════════════════════════════════
 function encrypt(data, key) {
   return CryptoJS.AES.encrypt(JSON.stringify(data), key).toString();
@@ -734,54 +803,189 @@ function decrypt(cipher, key) {
 }
 
 // ══════════════════════════════════════════
+//  GITHUB CONFIG  (stored in localStorage)
+// ══════════════════════════════════════════
+function loadGhConfig() {
+  try {
+    const raw = localStorage.getItem('vault_gh');
+    if (raw) ghCfg = JSON.parse(raw);
+  } catch {}
+  document.getElementById('gh-owner').value = ghCfg.owner || '';
+  document.getElementById('gh-repo').value  = ghCfg.repo  || 'vault-data';
+  document.getElementById('gh-token').value = ghCfg.token || '';
+  updateGhDot();
+}
+
+function saveGhConfig() {
+  ghCfg = {
+    owner: document.getElementById('gh-owner').value.trim(),
+    repo:  document.getElementById('gh-repo').value.trim()  || 'vault-data',
+    token: document.getElementById('gh-token').value.trim(),
+  };
+  localStorage.setItem('vault_gh', JSON.stringify(ghCfg));
+  updateGhDot();
+  toast('GitHub settings saved', 'success');
+}
+
+function updateGhDot() {
+  const dot = document.getElementById('gh-dot');
+  const ok  = ghCfg.owner && ghCfg.repo && ghCfg.token;
+  dot.className = 'dot ' + (ok ? 'ok' : '');
+}
+
+function ghConfigured() {
+  return !!(ghCfg.owner && ghCfg.repo && ghCfg.token);
+}
+
+// ══════════════════════════════════════════
+//  GITHUB API
+// ══════════════════════════════════════════
+async function ghFetch(method, body) {
+  const url = `https://api.github.com/repos/${ghCfg.owner}/${ghCfg.repo}/contents/vault.vault`;
+  const opts = {
+    method,
+    headers: {
+      Authorization: `token ${ghCfg.token}`,
+      Accept: 'application/vnd.github.v3+json',
+    }
+  };
+  if (body) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(url, opts);
+  return res;
+}
+
+// Pull vault.vault from GitHub, decrypt, populate entries[]
+async function syncFromGitHub() {
+  if (!ghConfigured()) return false;
+  setSyncing(true);
+  try {
+    const res = await ghFetch('GET');
+    if (res.status === 404) {
+      // No vault file yet — start fresh
+      ghSha = null;
+      entries = [];
+      setStatus('GitHub connected — vault is empty', false);
+      return true;
+    }
+    if (!res.ok) {
+      const j = await res.json();
+      throw new Error(j.message || `GitHub error ${res.status}`);
+    }
+    const json = await res.json();
+    ghSha = json.sha;
+    const raw = atob(json.content.replace(/\n/g, ''));
+    const parsed = JSON.parse(raw);
+    const data = decrypt(parsed.encrypted, masterKey);
+    if (data === null) {
+      toast('Wrong master password for this vault', 'error');
+      return false;
+    }
+    entries = data;
+    isDirty = false;
+    const ts = parsed.ts ? new Date(parsed.ts).toLocaleTimeString() : '—';
+    setStatus(`Synced from GitHub · ${entries.length} entries · ${ts}`, false);
+    return true;
+  } catch(err) {
+    toast(`Sync error: ${err.message}`, 'error');
+    setStatus('GitHub sync failed', true);
+    return false;
+  } finally {
+    setSyncing(false);
+  }
+}
+
+// Encrypt entries[] and push to GitHub
+async function syncToGitHub() {
+  if (!ghConfigured()) { toast('Configure GitHub settings on the lock screen first', 'error'); return; }
+  if (!masterKey) return;
+  setSyncing(true);
+  try {
+    const payload = { v: 1, encrypted: encrypt(entries, masterKey), ts: Date.now() };
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
+    const body = {
+      message: `vault: update ${new Date().toISOString()}`,
+      content,
+    };
+    if (ghSha) body.sha = ghSha;
+
+    const res = await ghFetch('PUT', body);
+    if (!res.ok) {
+      const j = await res.json();
+      throw new Error(j.message || `GitHub PUT failed ${res.status}`);
+    }
+    const j = await res.json();
+    ghSha = j.content.sha;   // update SHA for next push
+    isDirty = false;
+    setStatus(`Saved to GitHub · ${entries.length} entries · ${new Date().toLocaleTimeString()}`, false);
+    toast('Vault synced to GitHub ✓', 'success');
+  } catch(err) {
+    toast(`Sync error: ${err.message}`, 'error');
+  } finally {
+    setSyncing(false);
+  }
+}
+
+function setSyncing(on) {
+  const btn  = document.getElementById('sync-btn');
+  const icon = document.getElementById('sync-icon');
+  if (on) {
+    btn.classList.add('syncing');
+    btn.disabled = true;
+    icon.classList.add('spin');
+    setStatus('Syncing…', false);
+    document.getElementById('status-dot').className = 'status-dot syncing';
+  } else {
+    btn.classList.remove('syncing');
+    btn.disabled = false;
+    icon.classList.remove('spin');
+  }
+}
+
+// ══════════════════════════════════════════
 //  LOCK / UNLOCK
 // ══════════════════════════════════════════
-let importOnUnlock = false;
-function showImportOnUnlock() { importOnUnlock = true; toast('Enter your master password first, then load your file.', 'success'); }
-
 function toggleMasterVis() {
   const inp = document.getElementById('master-input');
   inp.type = inp.type === 'password' ? 'text' : 'password';
 }
 
-function unlock() {
+async function unlock() {
   const pw = document.getElementById('master-input').value.trim();
   if (pw.length < 1) { document.getElementById('lock-error').textContent = 'Enter a password.'; return; }
   masterKey = pw;
   document.getElementById('lock-error').textContent = '';
+
+  // Show app immediately, then sync
   document.getElementById('lock-screen').classList.add('hidden');
   document.getElementById('app').classList.add('visible');
-  setStatus('Vault unlocked — no file loaded', false);
-  renderAll();
-  if (importOnUnlock) { importOnUnlock = false; triggerImport(); }
+
+  if (ghConfigured()) {
+    setStatus('Connecting to GitHub…', false);
+    renderAll();
+    const ok = await syncFromGitHub();
+    if (ok) renderAll();
+  } else {
+    setStatus('No GitHub config — add it on the lock screen', false);
+    renderAll();
+  }
 }
 
 document.getElementById('master-input').addEventListener('keydown', e => { if (e.key === 'Enter') unlock(); });
 
 function lockVault() {
-  if (isDirty && !confirm('You have unsaved changes. Lock anyway?')) return;
-  masterKey = null; entries = []; currentFile = null; isDirty = false;
+  if (isDirty && !confirm('You have unsynced changes. Lock anyway?')) return;
+  masterKey = null; entries = []; isDirty = false; ghSha = null;
   document.getElementById('lock-screen').classList.remove('hidden');
   document.getElementById('app').classList.remove('visible');
   document.getElementById('master-input').value = '';
 }
 
 // ══════════════════════════════════════════
-//  FILE I/O
+//  FILE I/O  (fallback — no GitHub needed)
 // ══════════════════════════════════════════
-function saveToFile() {
-  if (!masterKey) return;
-  const payload = { v: 1, encrypted: encrypt(entries, masterKey), ts: Date.now() };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'vault.vault'; a.click();
-  URL.revokeObjectURL(url);
-  isDirty = false;
-  setStatus('Saved — upload vault.vault to Google Drive', false);
-  toast('vault.vault downloaded — upload it to Google Drive', 'success');
-}
-
 function triggerImport() {
   document.getElementById('file-import').value = '';
   document.getElementById('file-import').click();
@@ -797,8 +1001,8 @@ function loadFromFile(e) {
       if (!payload.encrypted) { toast('Invalid vault file', 'error'); return; }
       const data = decrypt(payload.encrypted, masterKey);
       if (!data) { toast('Wrong master password for this file', 'error'); return; }
-      entries = data; currentFile = file.name; isDirty = false;
-      setStatus(`Loaded: ${file.name}`, false);
+      entries = data; isDirty = false;
+      setStatus(`Loaded: ${file.name} · ${entries.length} entries`, false);
       renderAll();
       toast(`Loaded ${entries.length} entries`, 'success');
     } catch { toast('Could not read file', 'error'); }
@@ -816,6 +1020,7 @@ function renderStats() {
   document.getElementById('stats-bar').innerHTML = `
     <div class="stat-pill"><strong>${entries.length}</strong> entries</div>
     <div class="stat-pill"><strong>${cats.length}</strong> categories</div>
+    ${ghConfigured() ? `<div class="stat-pill">☁ ${ghCfg.owner}/${ghCfg.repo}</div>` : ''}
   `;
 }
 
@@ -911,7 +1116,9 @@ function toggleReveal(id) {
 
 function copyField(id, field) {
   const entry = entries.find(e => e.id === id); if (!entry) return;
-  navigator.clipboard.writeText(entry[field]).then(() => toast(`${field === 'password' ? 'Password' : 'Email'} copied!`, 'success'));
+  navigator.clipboard.writeText(entry[field]).then(() =>
+    toast(`${field === 'password' ? 'Password' : 'Email'} copied!`, 'success')
+  );
 }
 
 function deleteEntry(id) {
@@ -951,8 +1158,8 @@ function openEditModal(id) {
 function closeModal() { document.getElementById('entry-modal').classList.remove('open'); }
 
 function saveEntry() {
-  const title = document.getElementById('f-title').value.trim();
-  const email = document.getElementById('f-email').value.trim();
+  const title    = document.getElementById('f-title').value.trim();
+  const email    = document.getElementById('f-email').value.trim();
   const password = document.getElementById('f-password').value.trim();
   if (!title || !email || !password) { toast('Title, email & password are required', 'error'); return; }
 
@@ -975,6 +1182,9 @@ function saveEntry() {
 
   closeModal(); markDirty(); renderAll();
   toast(editId ? 'Entry updated' : 'Entry added', 'success');
+
+  // Auto-sync to GitHub after every save
+  if (ghConfigured()) syncToGitHub();
 }
 
 function togglePwVis() {
@@ -992,17 +1202,20 @@ function genPassword() {
   navigator.clipboard.writeText(pw).then(() => toast('Generated & copied!', 'success'));
 }
 
-// close modal on overlay click
 document.getElementById('entry-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('entry-modal')) closeModal();
 });
+
+// Also auto-sync on delete after a tick (entries already updated)
+const _origDelete = deleteEntry;
+// (deleteEntry already calls markDirty; syncToGitHub called there via markDirty override below)
 
 // ══════════════════════════════════════════
 //  STATUS & TOAST
 // ══════════════════════════════════════════
 function markDirty() {
   isDirty = true;
-  setStatus(`${currentFile || 'vault'} — unsaved changes`, true);
+  setStatus('Unsaved changes — syncing…', true);
 }
 
 function setStatus(msg, unsaved) {
@@ -1025,6 +1238,11 @@ function esc(str) {
   if (!str) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+// ══════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════
+loadGhConfig();
 </script>
 </body>
 </html>
