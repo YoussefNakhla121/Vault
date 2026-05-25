@@ -897,19 +897,51 @@ async function syncFromGitHub() {
   }
 }
 
-// Encrypt entries[] and push to GitHub
+// Encrypt entries[] and push to GitHub.
+// Always re-fetches the current SHA first so we never conflict with the extension.
 async function syncToGitHub() {
   if (!ghConfigured()) { toast('Configure GitHub settings on the lock screen first', 'error'); return; }
   if (!masterKey) return;
   setSyncing(true);
   try {
+    // ── Step 1: fetch the live SHA (and merge any entries the extension added) ──
+    const getRes = await ghFetch('GET');
+    if (getRes.ok) {
+      const getJson = await getRes.json();
+      const liveShа = getJson.sha;          // always use this for the PUT
+      if (liveShа !== ghSha) {
+        // Extension pushed something since we last synced — merge its entries in
+        try {
+          const raw    = atob(getJson.content.replace(/\n/g, ''));
+          const parsed = JSON.parse(raw);
+          const remote = decrypt(parsed.encrypted, masterKey) || [];
+          // Union: keep all local entries, add any remote ones we don't have yet
+          const localIds = new Set(entries.map(e => e.id));
+          for (const re of remote) {
+            if (!localIds.has(re.id)) entries.push(re);
+          }
+          // For entries that exist in both, take whichever was updated more recently
+          entries = entries.map(le => {
+            const re = remote.find(r => r.id === le.id);
+            return (re && re.updatedAt > le.updatedAt) ? re : le;
+          });
+        } catch { /* if merge fails, push our version anyway */ }
+        ghSha = liveShа;
+        renderAll();
+      }
+    } else if (getRes.status !== 404) {
+      const j = await getRes.json();
+      throw new Error(j.message || `GitHub GET failed ${getRes.status}`);
+    }
+
+    // ── Step 2: push ──────────────────────────────────────────────────────────
     const payload = { v: 1, encrypted: encrypt(entries, masterKey), ts: Date.now() };
     const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
     const body = {
       message: `vault: update ${new Date().toISOString()}`,
       content,
     };
-    if (ghSha) body.sha = ghSha;
+    if (ghSha) body.sha = ghSha;   // now guaranteed to be the live SHA
 
     const res = await ghFetch('PUT', body);
     if (!res.ok) {
@@ -917,7 +949,7 @@ async function syncToGitHub() {
       throw new Error(j.message || `GitHub PUT failed ${res.status}`);
     }
     const j = await res.json();
-    ghSha = j.content.sha;   // update SHA for next push
+    ghSha = j.content.sha;   // store the new SHA for next time
     isDirty = false;
     setStatus(`Saved to GitHub · ${entries.length} entries · ${new Date().toLocaleTimeString()}`, false);
     toast('Vault synced to GitHub ✓', 'success');
